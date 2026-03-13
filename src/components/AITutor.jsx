@@ -16,33 +16,49 @@ export function AITutor({ question, userAnswer, isCorrect }) {
     setLoading(true);
 
     try {
+      const payload = {
+        messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+        question: {
+          text: question.question,
+          options: question.options,
+          correct: question.correct,
+          correctText: question.options[question.correct],
+          userAnswer: userAnswer !== null ? question.options[userAnswer] : null,
+          userAnswerIndex: userAnswer,
+          isCorrect: isCorrect,
+          explanation: question.explanation,
+          specialty: question.specialty,
+          topic: question.topic,
+        },
+      };
+
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-          question: {
-            text: question.question,
-            options: question.options,
-            correct: question.correct,
-            correctText: question.options[question.correct],
-            userAnswer: userAnswer !== null ? question.options[userAnswer] : null,
-            userAnswerIndex: userAnswer,
-            isCorrect,
-            explanation: question.explanation,
-            specialty: question.specialty,
-            topic: question.topic,
-          },
-        }),
+        body: JSON.stringify(payload),
       });
-      const data = await res.json();
-      if (data.error) {
-        setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Error: ' + data.error }]);
-      } else {
-        setMessages(prev => [...prev, { role: 'assistant', content: data.reply || 'Sin respuesta.' }]);
+
+      let data;
+      try {
+        data = await res.json();
+      } catch (e) {
+        const text = await res.text();
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: '⚠️ La API no devolvió JSON válido. Status: ' + res.status + '. Verifica que el deploy en Vercel esté activo.'
+        }]);
+        setLoading(false);
+        return;
       }
+
+      const reply = data.reply || data.error || 'Sin respuesta.';
+      setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
+
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Error de conexión: ' + (err.message || 'Verifica que la API key esté configurada en Vercel.') }]);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '⚠️ No se pudo conectar con /api/chat. Error: ' + (err.message || 'red no disponible') + '. Si estás en desarrollo local, usa "vercel dev" en vez de "npm run dev".'
+      }]);
     }
     setLoading(false);
   };
