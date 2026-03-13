@@ -36,9 +36,13 @@ export function AITutor({ question, userAnswer, isCorrect }) {
         }),
       });
       const data = await res.json();
-      setMessages(prev => [...prev, { role: 'assistant', content: data.reply || 'Error al obtener respuesta.' }]);
-    } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Error de conexión. Intenta de nuevo.' }]);
+      if (data.error) {
+        setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Error: ' + data.error }]);
+      } else {
+        setMessages(prev => [...prev, { role: 'assistant', content: data.reply || 'Sin respuesta.' }]);
+      }
+    } catch (err) {
+      setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Error de conexión: ' + (err.message || 'Verifica que la API key esté configurada en Vercel.') }]);
     }
     setLoading(false);
   };
