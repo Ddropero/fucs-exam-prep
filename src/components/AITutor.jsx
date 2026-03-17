@@ -1,11 +1,44 @@
 import { useState, useEffect, useRef } from 'react';
 import { Icons } from './Icons';
 
+const WORKER_URL = 'https://bid-proxy.ddropero.workers.dev';
+
 export function AITutor({ question, userAnswer, isCorrect }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const chatRef = useRef(null);
+
+  const buildSystemPrompt = () => {
+    let opts = '';
+    for (let i = 0; i < question.options.length; i++) {
+      if (i > 0) opts += ', ';
+      opts += String.fromCharCode(65 + i) + ') ' + question.options[i];
+    }
+    const correctLetter = String.fromCharCode(65 + question.correct);
+    const correctText = question.options[question.correct];
+    const studentAns = userAnswer !== null
+      ? String.fromCharCode(65 + userAnswer) + ') ' + question.options[userAnswer]
+      : 'No ha respondido aun';
+
+    return `Eres un tutor medico experto de la FUCS (Fundacion Universitaria de Ciencias de la Salud, Colombia). Ayudas estudiantes a prepararse para el examen medico.
+
+PREGUNTA: ${question.question}
+OPCIONES: ${opts}
+CORRECTA: ${correctLetter}) ${correctText}
+ESTUDIANTE: ${studentAns}
+${isCorrect ? 'ACERTO' : 'FALLO'}
+EXPLICACION: ${question.explanation || 'No disponible'}
+TEMA: ${question.theme || 'General'}
+AÑO: ${question.year || 'N/A'}
+
+INSTRUCCIONES:
+- Responde en espanol, max 200 palabras
+- Usa **negritas** para terminos clave
+- Si el estudiante fallo, explica POR QUE su respuesta fue incorrecta y el razonamiento correcto
+- Relaciona con conceptos clinicos relevantes
+- Si preguntan sobre un tema diferente, responde con tu conocimiento medico`;
+  };
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
@@ -16,26 +49,15 @@ export function AITutor({ question, userAnswer, isCorrect }) {
     setLoading(true);
 
     try {
-      const payload = {
-        messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-        question: {
-          text: question.question,
-          options: question.options,
-          correct: question.correct,
-          correctText: question.options[question.correct],
-          userAnswer: userAnswer !== null ? question.options[userAnswer] : null,
-          userAnswerIndex: userAnswer,
-          isCorrect: isCorrect,
-          explanation: question.explanation,
-          theme: question.theme,
-          year: question.year,
-        },
-      };
-
-      const res = await fetch('/api/chat', {
+      const res = await fetch(WORKER_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1000,
+          system: buildSystemPrompt(),
+          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+        }),
       });
 
       let data;
@@ -44,19 +66,33 @@ export function AITutor({ question, userAnswer, isCorrect }) {
       } catch {
         setMessages(prev => [...prev, {
           role: 'assistant',
-          content: 'La API no devolvio JSON valido. Status: ' + res.status + '. Verifica que el deploy en Vercel este activo.'
+          content: 'La API no devolvio JSON valido. Status: ' + res.status
         }]);
         setLoading(false);
         return;
       }
 
-      const reply = data.reply || data.error || 'Sin respuesta.';
-      setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
+      if (data.error) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: 'Error de API: ' + (data.error.message || JSON.stringify(data.error))
+        }]);
+        setLoading(false);
+        return;
+      }
+
+      let reply = '';
+      if (data.content && Array.isArray(data.content)) {
+        for (let j = 0; j < data.content.length; j++) {
+          if (data.content[j].text) reply += data.content[j].text;
+        }
+      }
+      setMessages(prev => [...prev, { role: 'assistant', content: reply || 'Sin respuesta.' }]);
 
     } catch (err) {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'No se pudo conectar con /api/chat. Error: ' + (err.message || 'red no disponible') + '. Si estas en desarrollo local, usa "vercel dev" en vez de "npm run dev".'
+        content: 'No se pudo conectar con el tutor IA. Error: ' + (err.message || 'red no disponible')
       }]);
     }
     setLoading(false);

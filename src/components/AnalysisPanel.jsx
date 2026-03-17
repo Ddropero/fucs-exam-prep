@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Icons } from './Icons';
 import { THEME_EMOJIS } from '../data/questions';
 
+const WORKER_URL = 'https://bid-proxy.ddropero.workers.dev';
+
 export function AnalysisPanel({ results, allHistory, onBack, onHome, onPractice }) {
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -17,15 +19,15 @@ export function AnalysisPanel({ results, allHistory, onBack, onHome, onPractice 
 
     // Build performance data
     const currentQuiz = results.history;
-    const byTheme = {};
+    const byThemeData = {};
     currentQuiz.forEach(h => {
       const t = h.question.theme;
-      if (!byTheme[t]) byTheme[t] = { correct: 0, total: 0, wrong: [] };
-      byTheme[t].total++;
+      if (!byThemeData[t]) byThemeData[t] = { correct: 0, total: 0, wrong: [] };
+      byThemeData[t].total++;
       if (h.correct) {
-        byTheme[t].correct++;
+        byThemeData[t].correct++;
       } else {
-        byTheme[t].wrong.push({
+        byThemeData[t].wrong.push({
           question: h.question.question,
           userAnswer: h.question.options[h.answer],
           correctAnswer: h.question.options[h.question.correct],
@@ -46,7 +48,7 @@ export function AnalysisPanel({ results, allHistory, onBack, onHome, onPractice 
       });
     });
 
-    const performanceSummary = Object.entries(byTheme).map(([theme, data]) => {
+    const performanceSummary = Object.entries(byThemeData).map(([theme, data]) => {
       const pct = Math.round((data.correct / data.total) * 100);
       const hist = historicalByTheme[theme];
       const histPct = hist ? Math.round((hist.correct / hist.total) * 100) : null;
@@ -62,44 +64,91 @@ export function AnalysisPanel({ results, allHistory, onBack, onHome, onPractice 
       return pctA - pctB;
     });
 
-    const payload = {
-      messages: [{
-        role: 'user',
-        content: 'Analiza mi rendimiento en este simulacro y dame recomendaciones de estudio personalizadas.',
-      }],
-      analysisData: {
-        currentScore: `${results.score}/${results.total} (${Math.round(results.score / results.total * 100)}%)`,
-        timeElapsed: `${Math.floor(results.elapsed / 60)}:${(results.elapsed % 60).toString().padStart(2, '0')}`,
-        totalSimulacros: allHistory.length,
-        performanceByTheme: performanceSummary,
-      },
-    };
+    // Build system prompt (moved from serverless function)
+    let themeDetails = '';
+    performanceSummary.forEach(t => {
+      themeDetails += `\n- ${t.theme}: ${t.score} (historico: ${t.historical})`;
+      if (t.wrongQuestions && t.wrongQuestions.length > 0) {
+        t.wrongQuestions.forEach(wq => {
+          themeDetails += `\n  * FALLO: "${wq.question.substring(0, 100)}..."`;
+          themeDetails += `\n    Respondio: "${wq.userAnswer}" | Correcta: "${wq.correctAnswer}"`;
+          if (wq.explanation) themeDetails += `\n    Explicacion: "${wq.explanation.substring(0, 150)}..."`;
+        });
+      }
+    });
+
+    const currentScore = `${results.score}/${results.total} (${Math.round(results.score / results.total * 100)}%)`;
+    const timeElapsed = `${Math.floor(results.elapsed / 60)}:${(results.elapsed % 60).toString().padStart(2, '0')}`;
+
+    const systemPrompt = `Eres un tutor medico experto de la FUCS (Fundacion Universitaria de Ciencias de la Salud, Colombia). Tu rol es analizar el rendimiento del estudiante en simulacros de examen medico y dar recomendaciones de estudio CONCRETAS y PERSONALIZADAS.
+
+DATOS DEL ESTUDIANTE:
+- Puntaje actual: ${currentScore}
+- Tiempo: ${timeElapsed}
+- Simulacros completados: ${allHistory.length}
+
+RENDIMIENTO POR TEMA:${themeDetails}
+
+INSTRUCCIONES:
+1. Identifica los 3 temas MAS DEBILES con precision
+2. Para cada tema debil, explica QUE conceptos especificos debe repasar basandote en las preguntas que fallo
+3. Da un PLAN DE ESTUDIO concreto con prioridades (alta/media/baja)
+4. Sugiere recursos y tecnicas de estudio especificas para medicina
+5. Si el estudiante va mejorando respecto al historico, reconocelo
+6. Se motivador pero honesto
+
+FORMATO:
+- Usa ## para secciones principales
+- Usa ### para subsecciones
+- Usa **negritas** para conceptos clave
+- Usa listas numeradas para el plan de estudio
+- Maximo 500 palabras
+- Responde en espanol`;
 
     try {
-      const res = await fetch('/api/analysis', {
+      const res = await fetch(WORKER_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 2000,
+          system: systemPrompt,
+          messages: [{
+            role: 'user',
+            content: 'Analiza mi rendimiento y dame recomendaciones de estudio personalizadas basadas en mis errores especificos.',
+          }],
+        }),
       });
 
       let data;
       try {
         data = await res.json();
       } catch {
-        setError('La API no devolvio JSON valido. Verifica el deploy en Vercel.');
+        setError('La API no devolvio JSON valido.');
         setLoading(false);
         return;
       }
 
-      if (data.analysis) {
-        setAnalysis(data.analysis);
-      } else if (data.error) {
-        setError(data.reply || data.error);
+      if (data.error) {
+        setError('Error de API: ' + (data.error.message || JSON.stringify(data.error)));
+        setLoading(false);
+        return;
+      }
+
+      let analysisText = '';
+      if (data.content && Array.isArray(data.content)) {
+        for (let j = 0; j < data.content.length; j++) {
+          if (data.content[j].text) analysisText += data.content[j].text;
+        }
+      }
+
+      if (analysisText) {
+        setAnalysis(analysisText);
       } else {
-        setError('Respuesta inesperada del servidor.');
+        setError('Sin respuesta del modelo.');
       }
     } catch (err) {
-      setError('No se pudo conectar con /api/analysis. ' + (err.message || ''));
+      setError('No se pudo conectar con el tutor IA. ' + (err.message || ''));
     }
     setLoading(false);
   };
