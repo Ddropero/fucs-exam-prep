@@ -1,111 +1,101 @@
-# FUCS Exam Prep — Claude Code Project Guide
+# FUCS Exam Prep — Contexto del Proyecto
 
-## Project Overview
-Medical exam preparation platform for FUCS (Fundación Universitaria de Ciencias de la Salud, Colombia). 
-1000 questions extracted from simulacros 2019-2024, with AI-powered tutor using Claude Sonnet 4.6.
+## Resumen
+Plataforma de preparación para el examen médico FUCS (Fundación Universitaria de Ciencias de la Salud), Colombia. Banco de 1000 preguntas extraídas de simulacros 2019-2024 con tutor IA integrado.
 
-## Tech Stack
-- **Frontend:** React 18 + Vite 6
-- **Styling:** CSS-in-JS (inline styles), dark theme (#08061a), purple gradients
-- **AI:** Claude Sonnet 4.6 via Anthropic API (`claude-sonnet-4-6`)
-- **Backend:** Vercel Serverless Functions (Node 20)
-- **Deploy:** Vercel (auto-deploy from GitHub)
-- **Repo:** github.com/Ddropero/fucs-exam-prep
+## Stack
+- **Frontend**: React 18 + Vite 6
+- **Backend**: Vercel Serverless Functions (Node 20)
+- **IA**: Claude Sonnet 4.6 (`claude-sonnet-4-6`) vía Anthropic API
+- **Deploy**: Vercel (auto-deploy desde GitHub)
+- **Repo**: github.com/Ddropero/fucs-exam-prep
 
-## Project Structure
+## Estructura
 ```
 fucs-exam-prep/
 ├── api/
-│   ├── chat.js          # Serverless proxy to Anthropic API (protects API key)
-│   └── health.js        # Diagnostic endpoint (/api/health)
+│   ├── chat.js          # Serverless proxy → Anthropic API
+│   └── health.js        # Diagnóstico de API key
 ├── public/
 │   └── favicon.svg
 ├── src/
 │   ├── components/
-│   │   ├── AITutor.jsx  # Chat widget with Claude (appears after answering)
-│   │   └── Icons.jsx    # SVG icon components
+│   │   ├── AITutor.jsx  # Chat con Claude (tutor médico)
+│   │   └── Icons.jsx    # Iconos SVG
 │   ├── data/
-│   │   └── questions.js # 1000 questions bank (598KB)
-│   ├── App.jsx          # Main app: Home, Quiz, Results, Study screens
-│   ├── index.css        # Global styles, scrollbar, animations
-│   └── main.jsx         # React entry point
-├── .env.example         # Template for ANTHROPIC_API_KEY
-├── vercel.json          # Vercel config (Vite + Node 20 functions)
-├── package.json         # Dependencies (React 18, Vite 6)
-└── CLAUDE.md            # This file
+│   │   └── questions.js # 1000 preguntas MCQ
+│   ├── App.jsx          # Componente principal (4 pantallas)
+│   ├── index.css        # Estilos globales
+│   └── main.jsx         # Entry point
+├── .env.example
+├── .gitignore
+├── CLAUDE.md            # Este archivo
+├── index.html
+├── package.json
+├── vercel.json
+└── vite.config.js
 ```
 
-## App Modes
-1. **Simulacro (Quiz):** Configurable quiz (5/10/20/50/100 questions), specialty filter, real-time score, progress bar
-2. **Estudio (Study):** Flashcard navigation with tap-to-reveal, specialty filter
-3. **Tutor IA:** Chat with Claude after each question — knows the question context, correct answer, and student's response
+## Modos de la App
+1. **Home** — Selección de especialidad, tamaño de quiz (5/10/20/50/100)
+2. **Quiz (Simulacro)** — Preguntas MCQ con puntaje en tiempo real, barra de progreso
+3. **Resultados** — Score total, desglose por especialidad, revisión de incorrectas
+4. **Estudio (Flashcards)** — Navegación por flashcards con filtro por especialidad
 
-## Question Bank Format (src/data/questions.js)
-```javascript
+## Banco de Preguntas (src/data/questions.js)
+- **1000 preguntas** parseadas de FUCS_2019-2024_.pdf (8475 líneas)
+- 9 especialidades: Cirugía(207), Epidemiología(226), Medicina Interna(131), Fisiología(94), Pediatría(97), Ginecología(76), Patología(70), Anatomía(51), Farmacología(48)
+- Formato: `{ id, specialty, topic, question, options[], correct (0-based index), explanation, year, difficulty }`
+- Respuestas de preguntas de alta frecuencia fueron verificadas manualmente
+- ~885 preguntas tienen respuesta correct=0 por defecto y necesitan revisión
+
+## API (Tutor IA)
+- Frontend llama a `/api/chat` (POST)
+- Serverless function hace proxy a `https://api.anthropic.com/v1/messages`
+- API key se configura como env var `ANTHROPIC_API_KEY` en Vercel
+- Todos los errores se retornan como HTTP 200 con campo `reply` (para que el frontend siempre muestre algo)
+- `/api/health` retorna estado de la API key
+
+## Diseño
+- Tema oscuro: fondo `#08061a`, texto `#e8e0f0`
+- Acentos: gradiente púrpura `#7c3aed → #6366f1`
+- Fonts: DM Sans (texto), Space Mono (números)
+- Colores de estado: verde `#4ade80` (correcto), rojo `#f87171` (incorrecto), amarillo `#fbbf24` (regular)
+
+## Problemas Conocidos
+1. **Respuestas por defecto**: ~885 preguntas tienen `correct: 0` porque no se pudo determinar automáticamente la respuesta correcta. Necesitan revisión médica manual.
+2. **Clasificación "General"**: Algunas preguntas terminaron reclasificadas a "Epidemiología" o "Medicina Interna" como fallback. Podrían estar mal clasificadas.
+3. **Tutor IA**: Requiere API key de Anthropic configurada en Vercel. Sin ella, el chat muestra error descriptivo.
+
+## Comandos
+```bash
+npm install          # Instalar dependencias
+npm run dev          # Dev server (sin API)
+vercel dev           # Dev server CON serverless functions
+npm run build        # Build de producción
+```
+
+## Variables de Entorno
+```
+ANTHROPIC_API_KEY=sk-ant-...   # Requerida para Tutor IA
+```
+
+## Para Agregar Preguntas
+Editar `src/data/questions.js`, agregar al array QUESTION_BANK:
+```js
 {
-  id: 1,
-  specialty: "Fisiología",     // One of 9 specialties
-  topic: "Cardiovascular",     // Sub-topic
-  year: "2019",                // Simulacro year
-  difficulty: "alta",          // alta | media
-  question: "...",             // Question text
-  options: ["A", "B", "C", "D"],  // Answer options
-  correct: 1,                  // 0-based index of correct answer
-  explanation: "..."           // Medical explanation
+  id: 1001,
+  specialty: "Fisiología",  // Debe existir en SPECIALTIES
+  topic: "Cardiovascular",
+  year: "2024",
+  difficulty: "alta",       // alta | media | baja
+  question: "Pregunta...",
+  options: ["A", "B", "C", "D"],
+  correct: 2,               // Índice 0-based
+  explanation: "Explicación..."
 }
 ```
 
-## 9 Specialties Distribution
-- Epidemiología: 226 questions
-- Cirugía: 207
-- Medicina Interna: 131
-- Pediatría: 97
-- Fisiología: 94
-- Ginecología: 76
-- Patología: 70
-- Anatomía: 51
-- Farmacología: 48
-
-## API Architecture
-Frontend (`/api/chat` POST) → Vercel Serverless → Anthropic API
-
-The serverless function:
-- Reads ANTHROPIC_API_KEY from environment variable
-- Builds system prompt with full question context
-- Proxies to Claude Sonnet 4.6
-- Returns all errors as HTTP 200 with descriptive `reply` field (never silent failures)
-
-## Development Commands
-```bash
-npm install              # Install dependencies
-npm run dev              # Start Vite dev server (no API functions)
-vercel dev               # Start with serverless functions (requires vercel CLI)
-npm run build            # Production build → dist/
-```
-
-## Environment Variables
-- `ANTHROPIC_API_KEY` — Required for Tutor IA feature. Set in Vercel dashboard or .env for local dev.
-
-## Known Issues & Decisions
-- Template literal escaping in serverless functions caused silent failures → rewrote with plain string concatenation
-- `vercel.json` rewrites field broke API routing → removed, using direct /api/ paths
-- Serverless functions return HTTP 200 even for errors (with error message in `reply` field) for easier frontend debugging
-- GitHub PAT needs explicit `repo` scope for push access
-- questions.js is 598KB — the 1000 questions are embedded directly (Vite handles code splitting in production)
-- High-frequency questions (Gustilo, CRF, Nodo AV, Graves, Microglia etc.) have verified answers
-- Less common questions may need manual answer review
-
-## Source Data
-- Original file: FUCS_2019-2024_.pdf (actually a UTF-8 text file, 8475 lines)
-- 8 simulacro sections parsed → 1217 MCQs → 1155 after dedup → 1000 selected with specialty balancing
-- Pattern analysis documented in analisis_patrones_fucs.md
-
-## Potential Next Steps
-- Add more questions or verify answers for less common specialties
-- Add user progress tracking (localStorage or database)
-- Add timed exam mode with countdown
-- Add question bookmarking/flagging
-- Add spaced repetition algorithm
-- Improve AI tutor with conversation memory across questions
-- Add admin panel for question CRUD
-- Mobile app wrapper (React Native or PWA)
+## Fuentes de Datos
+- `FUCS_2019-2024_.pdf` — Archivo fuente (en realidad es .txt con extensión .pdf, 8475 líneas)
+- `analisis_patrones_fucs.md` — Análisis de patrones y preguntas de alta frecuencia
