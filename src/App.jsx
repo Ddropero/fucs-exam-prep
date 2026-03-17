@@ -1,27 +1,37 @@
-import { useState } from 'react';
-import { QUESTION_BANK, SPECIALTIES, SPECIALTY_EMOJIS, shuffleArray } from './data/questions';
+import { useState, useEffect } from 'react';
+import { QUESTION_BANK, THEMES, THEME_EMOJIS } from './data/questions';
 import { Icons } from './components/Icons';
 import { AITutor } from './components/AITutor';
+import { AnalysisPanel } from './components/AnalysisPanel';
 
-// ─── Screens ───
-function HomeScreen({ onStartQuiz, onStudy }) {
-  const [selectedSpecialties, setSelectedSpecialties] = useState([]);
+function shuffleArray(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// ─── Home ───
+function HomeScreen({ onStartQuiz, onStudy, history }) {
+  const [selectedThemes, setSelectedThemes] = useState([]);
   const [quizSize, setQuizSize] = useState(20);
 
-  const toggleSpecialty = (s) => {
-    setSelectedSpecialties(prev =>
-      prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]
+  const toggleTheme = (t) => {
+    setSelectedThemes(prev =>
+      prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]
     );
   };
 
-  const handleStart = () => onStartQuiz(selectedSpecialties, quizSize);
-  const handleRandom = () => onStartQuiz([], 20);
-
-  const specialtyStats = SPECIALTIES.map(s => ({
-    name: s,
-    total: QUESTION_BANK.filter(q => q.specialty === s).length,
-    emoji: SPECIALTY_EMOJIS[s] || '📋',
+  const themeStats = THEMES.map(t => ({
+    name: t,
+    total: QUESTION_BANK.filter(q => q.theme === t).length,
+    emoji: THEME_EMOJIS[t] || '📋',
   }));
+
+  // Calculate weak areas from history
+  const weakAreas = getWeakAreas(history);
 
   return (
     <div style={{ minHeight: '100vh' }}>
@@ -39,7 +49,7 @@ function HomeScreen({ onStartQuiz, onStudy }) {
             fontSize: 12, fontWeight: 500, color: '#a78bfa', marginBottom: 20,
             letterSpacing: '0.05em', textTransform: 'uppercase',
           }}>
-            <Icons.Sparkle /> Potenciado por IA
+            <Icons.Sparkle /> Potenciado por Claude Sonnet 4.6
           </div>
           <h1 style={{
             fontSize: 'clamp(32px, 6vw, 52px)', fontWeight: 700,
@@ -51,7 +61,7 @@ function HomeScreen({ onStartQuiz, onStudy }) {
             FUCS<br />EXAM PREP
           </h1>
           <p style={{ fontSize: 16, color: 'rgba(200,180,255,0.6)', maxWidth: 420, margin: '0 auto', lineHeight: 1.6 }}>
-            Simulacros 2019–2024 · {QUESTION_BANK.length} preguntas · Tutor IA integrado
+            Simulacros 2019-2024 &middot; {QUESTION_BANK.length} preguntas &middot; Tutor IA &middot; Analisis de debilidades
           </p>
         </div>
       </div>
@@ -62,7 +72,11 @@ function HomeScreen({ onStartQuiz, onStudy }) {
         borderTop: '1px solid rgba(139,92,246,0.08)',
         borderBottom: '1px solid rgba(139,92,246,0.08)',
       }}>
-        {[{ label: 'Preguntas', value: QUESTION_BANK.length }, { label: 'Especialidades', value: SPECIALTIES.length }, { label: 'Años', value: '2019-2024' }].map((s, i) => (
+        {[
+          { label: 'Preguntas', value: QUESTION_BANK.length },
+          { label: 'Temas', value: THEMES.length },
+          { label: 'Simulacros', value: history.length },
+        ].map((s, i) => (
           <div key={i} style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 22, fontWeight: 700, color: '#c4b5fd', fontFamily: "'Space Mono', monospace" }}>{s.value}</div>
             <div style={{ fontSize: 11, color: 'rgba(200,180,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4 }}>{s.label}</div>
@@ -70,16 +84,44 @@ function HomeScreen({ onStartQuiz, onStudy }) {
         ))}
       </div>
 
-      {/* Specialty Selection */}
+      {/* Weak areas alert */}
+      {weakAreas.length > 0 && (
+        <div style={{ padding: '16px 24px', maxWidth: 640, margin: '0 auto' }}>
+          <div style={{
+            padding: '16px 20px', borderRadius: 14,
+            background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.15)',
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#f87171', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icons.Target /> Areas que necesitan repaso
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {weakAreas.slice(0, 5).map(a => (
+                <button key={a.theme} onClick={() => {
+                  setSelectedThemes([a.theme]);
+                  setQuizSize(10);
+                }} style={{
+                  padding: '6px 12px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
+                  border: '1px solid rgba(248,113,113,0.2)',
+                  background: 'rgba(248,113,113,0.08)', color: '#fca5a5',
+                }}>
+                  {THEME_EMOJIS[a.theme] || '📋'} {a.theme} ({a.pct}%)
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Theme Selection */}
       <div style={{ padding: '32px 24px', maxWidth: 640, margin: '0 auto' }}>
         <h2 style={{ fontSize: 14, fontWeight: 600, color: 'rgba(200,180,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 16 }}>
-          Filtrar por especialidad
+          Filtrar por tema
         </h2>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 28 }}>
-          {specialtyStats.map(s => {
-            const active = selectedSpecialties.includes(s.name);
+          {themeStats.map(s => {
+            const active = selectedThemes.includes(s.name);
             return (
-              <button key={s.name} onClick={() => toggleSpecialty(s.name)} style={{
+              <button key={s.name} onClick={() => toggleTheme(s.name)} style={{
                 padding: '8px 14px', borderRadius: 10,
                 border: `1px solid ${active ? 'rgba(139,92,246,0.5)' : 'rgba(255,255,255,0.06)'}`,
                 background: active ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.03)',
@@ -96,7 +138,7 @@ function HomeScreen({ onStartQuiz, onStudy }) {
 
         {/* Quiz Size */}
         <h2 style={{ fontSize: 14, fontWeight: 600, color: 'rgba(200,180,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>
-          Preguntas por quiz
+          Preguntas por simulacro
         </h2>
         <div style={{ display: 'flex', gap: 8, marginBottom: 36 }}>
           {[5, 10, 20, 50, 100].map(n => (
@@ -114,7 +156,7 @@ function HomeScreen({ onStartQuiz, onStudy }) {
         </div>
 
         {/* Start */}
-        <button onClick={handleStart} style={{
+        <button onClick={() => onStartQuiz(selectedThemes, quizSize)} style={{
           width: '100%', padding: '18px 24px', borderRadius: 14, border: 'none', cursor: 'pointer',
           background: 'linear-gradient(135deg, #7c3aed, #6366f1, #4f46e5)',
           color: '#fff', fontSize: 16, fontWeight: 700,
@@ -126,14 +168,14 @@ function HomeScreen({ onStartQuiz, onStudy }) {
         </button>
 
         <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-          <button onClick={handleRandom} style={{
+          <button onClick={() => onStartQuiz([], 20)} style={{
             flex: 1, padding: '14px', borderRadius: 12,
             border: '1px solid rgba(255,255,255,0.06)',
             background: 'rgba(255,255,255,0.03)',
             color: 'rgba(200,180,255,0.6)', fontSize: 13, cursor: 'pointer', fontWeight: 500,
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           }}>
-            <Icons.Refresh /> Aleatorio rápido
+            <Icons.Refresh /> Aleatorio rapido
           </button>
           <button onClick={onStudy} style={{
             flex: 1, padding: '14px', borderRadius: 12,
@@ -145,11 +187,28 @@ function HomeScreen({ onStartQuiz, onStudy }) {
             <Icons.Book /> Modo estudio
           </button>
         </div>
+
+        {/* Weak areas practice button */}
+        {weakAreas.length > 0 && (
+          <button onClick={() => {
+            const weakThemes = weakAreas.slice(0, 3).map(a => a.theme);
+            onStartQuiz(weakThemes, 20);
+          }} style={{
+            width: '100%', padding: '14px', borderRadius: 12, marginTop: 10,
+            border: '1px solid rgba(248,113,113,0.2)',
+            background: 'rgba(248,113,113,0.06)',
+            color: '#fca5a5', fontSize: 13, cursor: 'pointer', fontWeight: 600,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          }}>
+            <Icons.Target /> Practicar temas debiles
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
+// ─── Quiz ───
 function QuizScreen({ questions, onFinish, onExit }) {
   const [currentQ, setCurrentQ] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
@@ -158,6 +217,7 @@ function QuizScreen({ questions, onFinish, onExit }) {
   const [score, setScore] = useState(0);
   const [answered, setAnswered] = useState(0);
   const [history, setHistory] = useState([]);
+  const [startTime] = useState(Date.now());
 
   const q = questions[currentQ];
   const percentage = answered > 0 ? Math.round((score / answered) * 100) : 0;
@@ -179,9 +239,12 @@ function QuizScreen({ questions, onFinish, onExit }) {
       setShowResult(false);
       setShowExplanation(false);
     } else {
-      onFinish({ score: score, total: questions.length, history });
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      onFinish({ score, total: questions.length, history, elapsed });
     }
   };
+
+  const letters = 'ABCDE';
 
   return (
     <div style={{ minHeight: '100vh' }}>
@@ -220,7 +283,7 @@ function QuizScreen({ questions, onFinish, onExit }) {
       </div>
 
       <div style={{ padding: '24px 20px', maxWidth: 680, margin: '0 auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
           <div style={{
             padding: '4px 10px', borderRadius: 6,
             background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.15)',
@@ -233,7 +296,14 @@ function QuizScreen({ questions, onFinish, onExit }) {
             background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.15)',
             fontSize: 11, color: '#93c5fd', fontWeight: 500,
           }}>
-            {q.specialty} · {q.topic}
+            {THEME_EMOJIS[q.theme] || '📋'} {q.theme}
+          </div>
+          <div style={{
+            padding: '4px 10px', borderRadius: 6,
+            background: 'rgba(255,255,255,0.04)',
+            fontSize: 11, color: 'rgba(200,180,255,0.4)',
+          }}>
+            {q.year} {q.simulacro}
           </div>
         </div>
 
@@ -268,7 +338,7 @@ function QuizScreen({ questions, onFinish, onExit }) {
                   background: showResult && isCorrectOpt ? 'rgba(34,197,94,0.2)' : showResult && isSelected ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.05)',
                   fontSize: 12, fontWeight: 700, fontFamily: "'Space Mono', monospace", flexShrink: 0,
                 }}>
-                  {showResult && isCorrectOpt ? <Icons.Check /> : showResult && isSelected ? <Icons.X /> : String.fromCharCode(65 + i)}
+                  {showResult && isCorrectOpt ? <Icons.Check /> : showResult && isSelected ? <Icons.X /> : letters[i]}
                 </span>
                 <span style={{ paddingTop: 3 }}>{opt}</span>
               </button>
@@ -284,10 +354,10 @@ function QuizScreen({ questions, onFinish, onExit }) {
               color: '#c4b5fd', fontSize: 13, cursor: 'pointer', fontWeight: 600,
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             }}>
-              <Icons.Book /> {showExplanation ? 'Ocultar explicación' : 'Ver explicación'}
+              <Icons.Book /> {showExplanation ? 'Ocultar explicacion' : 'Ver explicacion'}
             </button>
 
-            {showExplanation && (
+            {showExplanation && q.explanation && (
               <div style={{
                 marginTop: 12, padding: '16px 18px', borderRadius: 12,
                 background: 'rgba(139,92,246,0.06)', border: '1px solid rgba(139,92,246,0.12)',
@@ -315,18 +385,29 @@ function QuizScreen({ questions, onFinish, onExit }) {
   );
 }
 
-function ResultsScreen({ results, onRestart, onHome }) {
-  const { score, total, history } = results;
+// ─── Results ───
+function ResultsScreen({ results, allHistory, onRestart, onHome, onAnalysis }) {
+  const { score, total, history, elapsed } = results;
   const pct = Math.round((score / total) * 100);
   const grade = pct >= 90 ? 'Excelente' : pct >= 70 ? 'Aprobado' : pct >= 50 ? 'Regular' : 'Necesita repaso';
   const gradeColor = pct >= 90 ? '#4ade80' : pct >= 70 ? '#34d399' : pct >= 50 ? '#fbbf24' : '#f87171';
 
-  const bySpecialty = {};
+  const minutes = Math.floor(elapsed / 60);
+  const seconds = elapsed % 60;
+
+  const byTheme = {};
   history.forEach(h => {
-    const sp = h.question.specialty;
-    if (!bySpecialty[sp]) bySpecialty[sp] = { correct: 0, total: 0 };
-    bySpecialty[sp].total++;
-    if (h.correct) bySpecialty[sp].correct++;
+    const t = h.question.theme;
+    if (!byTheme[t]) byTheme[t] = { correct: 0, total: 0 };
+    byTheme[t].total++;
+    if (h.correct) byTheme[t].correct++;
+  });
+
+  // Sort by worst performing
+  const sortedThemes = Object.entries(byTheme).sort((a, b) => {
+    const pctA = a[1].correct / a[1].total;
+    const pctB = b[1].correct / b[1].total;
+    return pctA - pctB;
   });
 
   return (
@@ -348,29 +429,35 @@ function ResultsScreen({ results, onRestart, onHome }) {
           </div>
         </div>
         <h2 style={{ fontSize: 28, fontWeight: 700, color: gradeColor, marginBottom: 6 }}>{grade}</h2>
-        <p style={{ fontSize: 15, color: 'rgba(200,180,255,0.5)' }}>{score} de {total} correctas</p>
+        <p style={{ fontSize: 15, color: 'rgba(200,180,255,0.5)' }}>
+          {score} de {total} correctas &middot; {minutes}:{seconds.toString().padStart(2, '0')}
+        </p>
       </div>
 
       <div style={{ padding: '0 24px 24px', maxWidth: 640, margin: '0 auto' }}>
+        {/* Performance by theme */}
         <h3 style={{ fontSize: 13, fontWeight: 600, color: 'rgba(200,180,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>
-          Rendimiento por especialidad
+          Rendimiento por tema
         </h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 28 }}>
-          {Object.entries(bySpecialty).map(([sp, data]) => {
-            const spPct = Math.round((data.correct / data.total) * 100);
+          {sortedThemes.map(([theme, data]) => {
+            const tPct = Math.round((data.correct / data.total) * 100);
             return (
-              <div key={sp} style={{
+              <div key={theme} style={{
                 padding: '12px 16px', borderRadius: 10,
                 background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.04)',
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               }}>
-                <span style={{ fontSize: 14, color: '#d0c8e0' }}>{sp}</span>
+                <span style={{ fontSize: 14, color: '#d0c8e0', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {THEME_EMOJIS[theme] || '📋'} {theme}
+                  <span style={{ fontSize: 11, opacity: 0.5 }}>({data.correct}/{data.total})</span>
+                </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ width: 80, height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.05)' }}>
-                    <div style={{ height: '100%', borderRadius: 3, width: `${spPct}%`, background: spPct >= 70 ? '#4ade80' : spPct >= 50 ? '#fbbf24' : '#f87171' }} />
+                    <div style={{ height: '100%', borderRadius: 3, width: `${tPct}%`, background: tPct >= 70 ? '#4ade80' : tPct >= 50 ? '#fbbf24' : '#f87171', transition: 'width 0.5s' }} />
                   </div>
-                  <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "'Space Mono', monospace", color: spPct >= 70 ? '#4ade80' : spPct >= 50 ? '#fbbf24' : '#f87171', minWidth: 40, textAlign: 'right' }}>
-                    {spPct}%
+                  <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "'Space Mono', monospace", color: tPct >= 70 ? '#4ade80' : tPct >= 50 ? '#fbbf24' : '#f87171', minWidth: 40, textAlign: 'right' }}>
+                    {tPct}%
                   </span>
                 </div>
               </div>
@@ -378,10 +465,11 @@ function ResultsScreen({ results, onRestart, onHome }) {
           })}
         </div>
 
+        {/* Incorrect questions */}
         {history.some(h => !h.correct) && (
           <>
             <h3 style={{ fontSize: 13, fontWeight: 600, color: 'rgba(200,180,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>
-              Preguntas incorrectas
+              Preguntas incorrectas ({history.filter(h => !h.correct).length})
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 28 }}>
               {history.filter(h => !h.correct).map((h, i) => (
@@ -389,18 +477,40 @@ function ResultsScreen({ results, onRestart, onHome }) {
                   padding: '14px 16px', borderRadius: 12,
                   background: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.1)',
                 }}>
+                  <div style={{
+                    fontSize: 11, color: 'rgba(200,180,255,0.4)', marginBottom: 6,
+                    display: 'flex', alignItems: 'center', gap: 6,
+                  }}>
+                    {THEME_EMOJIS[h.question.theme] || '📋'} {h.question.theme}
+                  </div>
                   <p style={{ fontSize: 13, color: '#f0e8ff', lineHeight: 1.5, marginBottom: 8 }}>
                     {h.question.question}
                   </p>
                   <div style={{ fontSize: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <span style={{ color: '#f87171' }}>✗ Tu respuesta: {h.question.options[h.answer]}</span>
-                    <span style={{ color: '#4ade80' }}>✓ Correcta: {h.question.options[h.question.correct]}</span>
+                    <span style={{ color: '#f87171' }}>Tu respuesta: {h.question.options[h.answer]}</span>
+                    <span style={{ color: '#4ade80' }}>Correcta: {h.question.options[h.question.correct]}</span>
                   </div>
+                  {h.question.explanation && (
+                    <p style={{ fontSize: 12, color: 'rgba(200,180,255,0.5)', marginTop: 8, lineHeight: 1.5, fontStyle: 'italic' }}>
+                      {h.question.explanation}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
           </>
         )}
+
+        {/* AI Analysis Button */}
+        <button onClick={onAnalysis} style={{
+          width: '100%', padding: '16px', borderRadius: 12, border: 'none', cursor: 'pointer', marginBottom: 12,
+          background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+          color: '#fff', fontSize: 14, fontWeight: 700,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          boxShadow: '0 4px 16px rgba(245,158,11,0.25)',
+        }}>
+          <Icons.Brain /> Analisis IA de mis debilidades y recomendaciones
+        </button>
 
         <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={onRestart} style={{
@@ -425,12 +535,13 @@ function ResultsScreen({ results, onRestart, onHome }) {
   );
 }
 
+// ─── Study ───
 function StudyScreen({ onBack }) {
   const [studyIdx, setStudyIdx] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [studyFilter, setStudyFilter] = useState('all');
 
-  const filtered = studyFilter === 'all' ? QUESTION_BANK : QUESTION_BANK.filter(q => q.specialty === studyFilter);
+  const filtered = studyFilter === 'all' ? QUESTION_BANK : QUESTION_BANK.filter(q => q.theme === studyFilter);
   const card = filtered[studyIdx % filtered.length];
 
   return (
@@ -452,7 +563,7 @@ function StudyScreen({ onBack }) {
 
       <div style={{ padding: '16px 20px', maxWidth: 680, margin: '0 auto' }}>
         <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
-          {['all', ...SPECIALTIES].map(s => (
+          {['all', ...THEMES].map(s => (
             <button key={s} onClick={() => { setStudyFilter(s); setStudyIdx(0); setShowAnswer(false); }} style={{
               padding: '6px 12px', borderRadius: 8, fontSize: 12,
               border: `1px solid ${studyFilter === s ? 'rgba(139,92,246,0.4)' : 'rgba(255,255,255,0.06)'}`,
@@ -460,69 +571,119 @@ function StudyScreen({ onBack }) {
               color: studyFilter === s ? '#c4b5fd' : 'rgba(200,180,255,0.4)',
               cursor: 'pointer',
             }}>
-              {s === 'all' ? 'Todas' : s}
+              {s === 'all' ? 'Todas' : `${THEME_EMOJIS[s] || ''} ${s}`}
             </button>
           ))}
         </div>
 
-        <div onClick={() => setShowAnswer(!showAnswer)} style={{
-          padding: 28, borderRadius: 16, cursor: 'pointer', minHeight: 200, transition: 'all 0.3s',
-          background: showAnswer ? 'linear-gradient(135deg, rgba(34,197,94,0.06), rgba(59,130,246,0.04))' : 'rgba(255,255,255,0.03)',
-          border: `1px solid ${showAnswer ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.06)'}`,
-        }}>
-          <div style={{
-            padding: '4px 10px', borderRadius: 6, display: 'inline-block',
-            background: 'rgba(139,92,246,0.1)', marginBottom: 16,
-            fontSize: 11, color: '#a78bfa', fontWeight: 600,
-          }}>
-            {card.specialty} · {card.topic}
-          </div>
-          <p style={{ fontSize: 16, lineHeight: 1.6, color: '#f0e8ff', marginBottom: showAnswer ? 20 : 0 }}>
-            {card.question}
-          </p>
-          {showAnswer ? (
-            <>
-              <div style={{
-                padding: '12px 16px', borderRadius: 10, marginBottom: 14,
-                background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.15)',
-              }}>
-                <span style={{ fontSize: 12, color: '#4ade80', fontWeight: 600 }}>✓ Respuesta correcta:</span>
-                <p style={{ fontSize: 15, color: '#4ade80', margin: '6px 0 0', fontWeight: 600 }}>
-                  {String.fromCharCode(65 + card.correct)}) {card.options[card.correct]}
-                </p>
+        {card && (
+          <>
+            <div onClick={() => setShowAnswer(!showAnswer)} style={{
+              padding: 28, borderRadius: 16, cursor: 'pointer', minHeight: 200, transition: 'all 0.3s',
+              background: showAnswer ? 'linear-gradient(135deg, rgba(34,197,94,0.06), rgba(59,130,246,0.04))' : 'rgba(255,255,255,0.03)',
+              border: `1px solid ${showAnswer ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.06)'}`,
+            }}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                <div style={{
+                  padding: '4px 10px', borderRadius: 6, display: 'inline-block',
+                  background: 'rgba(139,92,246,0.1)',
+                  fontSize: 11, color: '#a78bfa', fontWeight: 600,
+                }}>
+                  {THEME_EMOJIS[card.theme] || '📋'} {card.theme}
+                </div>
+                <div style={{
+                  padding: '4px 10px', borderRadius: 6,
+                  background: 'rgba(255,255,255,0.04)',
+                  fontSize: 11, color: 'rgba(200,180,255,0.4)',
+                }}>
+                  {card.year}
+                </div>
               </div>
-              <p style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(200,180,255,0.7)' }}>{card.explanation}</p>
-            </>
-          ) : (
-            <p style={{ fontSize: 12, color: 'rgba(200,180,255,0.3)', marginTop: 20, textAlign: 'center' }}>
-              Toca para ver la respuesta
-            </p>
-          )}
-        </div>
+              <p style={{ fontSize: 16, lineHeight: 1.6, color: '#f0e8ff', marginBottom: showAnswer ? 20 : 0 }}>
+                {card.question}
+              </p>
+              {showAnswer ? (
+                <>
+                  {card.options.map((opt, i) => (
+                    <div key={i} style={{
+                      padding: '10px 14px', borderRadius: 10, marginBottom: 6,
+                      background: i === card.correct ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.02)',
+                      border: `1px solid ${i === card.correct ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.04)'}`,
+                    }}>
+                      <span style={{ fontSize: 14, color: i === card.correct ? '#4ade80' : 'rgba(200,180,255,0.5)', fontWeight: i === card.correct ? 600 : 400 }}>
+                        {'ABCDE'[i]}) {opt}
+                      </span>
+                    </div>
+                  ))}
+                  {card.explanation && (
+                    <p style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(200,180,255,0.7)', marginTop: 12 }}>{card.explanation}</p>
+                  )}
+                </>
+              ) : (
+                <>
+                  {card.options.map((opt, i) => (
+                    <div key={i} style={{
+                      padding: '10px 14px', borderRadius: 10, marginBottom: 6,
+                      background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)',
+                    }}>
+                      <span style={{ fontSize: 14, color: 'rgba(200,180,255,0.5)' }}>{'ABCDE'[i]}) {opt}</span>
+                    </div>
+                  ))}
+                  <p style={{ fontSize: 12, color: 'rgba(200,180,255,0.3)', marginTop: 16, textAlign: 'center' }}>
+                    Toca para ver la respuesta
+                  </p>
+                </>
+              )}
+            </div>
 
-        <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-          <button onClick={() => { setStudyIdx(Math.max(0, studyIdx - 1)); setShowAnswer(false); }} style={{
-            flex: 1, padding: '14px', borderRadius: 12,
-            border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)',
-            color: 'rgba(200,180,255,0.5)', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-          }}>
-            <Icons.Back /> Anterior
-          </button>
-          <button onClick={() => { setStudyIdx(studyIdx + 1); setShowAnswer(false); }} style={{
-            flex: 1, padding: '14px', borderRadius: 12, border: 'none',
-            background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
-            color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-          }}>
-            Siguiente <Icons.Arrow />
-          </button>
-        </div>
+            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <button onClick={() => { setStudyIdx(Math.max(0, studyIdx - 1)); setShowAnswer(false); }} style={{
+                flex: 1, padding: '14px', borderRadius: 12,
+                border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)',
+                color: 'rgba(200,180,255,0.5)', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}>
+                <Icons.Back /> Anterior
+              </button>
+              <button onClick={() => { setStudyIdx(studyIdx + 1); setShowAnswer(false); }} style={{
+                flex: 1, padding: '14px', borderRadius: 12, border: 'none',
+                background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
+                color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}>
+                Siguiente <Icons.Arrow />
+              </button>
+            </div>
 
-        {showAnswer && <AITutor question={card} userAnswer={null} isCorrect={false} />}
+            {showAnswer && <AITutor question={card} userAnswer={null} isCorrect={false} />}
+          </>
+        )}
       </div>
     </div>
   );
+}
+
+// ─── Helpers ───
+function getWeakAreas(allHistory) {
+  if (allHistory.length === 0) return [];
+  const byTheme = {};
+  allHistory.forEach(sim => {
+    sim.history.forEach(h => {
+      const t = h.question.theme;
+      if (!byTheme[t]) byTheme[t] = { correct: 0, total: 0 };
+      byTheme[t].total++;
+      if (h.correct) byTheme[t].correct++;
+    });
+  });
+  return Object.entries(byTheme)
+    .map(([theme, data]) => ({
+      theme,
+      pct: Math.round((data.correct / data.total) * 100),
+      total: data.total,
+      correct: data.correct,
+    }))
+    .filter(a => a.pct < 70 && a.total >= 2)
+    .sort((a, b) => a.pct - b.pct);
 }
 
 // ─── Main App ───
@@ -530,28 +691,76 @@ export default function App() {
   const [screen, setScreen] = useState('home');
   const [quizQuestions, setQuizQuestions] = useState([]);
   const [results, setResults] = useState(null);
-  const [lastConfig, setLastConfig] = useState({ specs: [], size: 20 });
+  const [lastConfig, setLastConfig] = useState({ themes: [], size: 20 });
+  const [allHistory, setAllHistory] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('fucs_history') || '[]');
+    } catch { return []; }
+  });
 
-  const startQuiz = (specs, size) => {
-    let pool = specs.length > 0
-      ? QUESTION_BANK.filter(q => specs.includes(q.specialty))
+  useEffect(() => {
+    try {
+      localStorage.setItem('fucs_history', JSON.stringify(allHistory.slice(-50)));
+    } catch {}
+  }, [allHistory]);
+
+  const startQuiz = (themes, size) => {
+    let pool = themes.length > 0
+      ? QUESTION_BANK.filter(q => themes.includes(q.theme))
       : [...QUESTION_BANK];
     const shuffled = shuffleArray(pool).slice(0, Math.min(size, pool.length));
     setQuizQuestions(shuffled);
-    setLastConfig({ specs, size });
+    setLastConfig({ themes, size });
     setScreen('quiz');
   };
 
   const finishQuiz = (res) => {
     setResults(res);
+    const newEntry = {
+      date: new Date().toISOString(),
+      score: res.score,
+      total: res.total,
+      elapsed: res.elapsed,
+      history: res.history,
+    };
+    setAllHistory(prev => [...prev, newEntry]);
     setScreen('results');
   };
 
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif", background: '#08061a', color: '#e8e0f0', minHeight: '100vh' }}>
-      {screen === 'home' && <HomeScreen onStartQuiz={startQuiz} onStudy={() => setScreen('study')} />}
-      {screen === 'quiz' && <QuizScreen questions={quizQuestions} onFinish={finishQuiz} onExit={() => setScreen('home')} />}
-      {screen === 'results' && <ResultsScreen results={results} onRestart={() => startQuiz(lastConfig.specs, lastConfig.size)} onHome={() => setScreen('home')} />}
+      {screen === 'home' && (
+        <HomeScreen
+          onStartQuiz={startQuiz}
+          onStudy={() => setScreen('study')}
+          history={allHistory}
+        />
+      )}
+      {screen === 'quiz' && (
+        <QuizScreen
+          questions={quizQuestions}
+          onFinish={finishQuiz}
+          onExit={() => setScreen('home')}
+        />
+      )}
+      {screen === 'results' && results && (
+        <ResultsScreen
+          results={results}
+          allHistory={allHistory}
+          onRestart={() => startQuiz(lastConfig.themes, lastConfig.size)}
+          onHome={() => setScreen('home')}
+          onAnalysis={() => setScreen('analysis')}
+        />
+      )}
+      {screen === 'analysis' && results && (
+        <AnalysisPanel
+          results={results}
+          allHistory={allHistory}
+          onBack={() => setScreen('results')}
+          onHome={() => setScreen('home')}
+          onPractice={(themes) => startQuiz(themes, 20)}
+        />
+      )}
       {screen === 'study' && <StudyScreen onBack={() => setScreen('home')} />}
     </div>
   );

@@ -27,8 +27,8 @@ export function AITutor({ question, userAnswer, isCorrect }) {
           userAnswerIndex: userAnswer,
           isCorrect: isCorrect,
           explanation: question.explanation,
-          specialty: question.specialty,
-          topic: question.topic,
+          theme: question.theme,
+          year: question.year,
         },
       };
 
@@ -41,11 +41,10 @@ export function AITutor({ question, userAnswer, isCorrect }) {
       let data;
       try {
         data = await res.json();
-      } catch (e) {
-        const text = await res.text();
+      } catch {
         setMessages(prev => [...prev, {
           role: 'assistant',
-          content: '⚠️ La API no devolvió JSON válido. Status: ' + res.status + '. Verifica que el deploy en Vercel esté activo.'
+          content: 'La API no devolvio JSON valido. Status: ' + res.status + '. Verifica que el deploy en Vercel este activo.'
         }]);
         setLoading(false);
         return;
@@ -57,7 +56,7 @@ export function AITutor({ question, userAnswer, isCorrect }) {
     } catch (err) {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: '⚠️ No se pudo conectar con /api/chat. Error: ' + (err.message || 'red no disponible') + '. Si estás en desarrollo local, usa "vercel dev" en vez de "npm run dev".'
+        content: 'No se pudo conectar con /api/chat. Error: ' + (err.message || 'red no disponible') + '. Si estas en desarrollo local, usa "vercel dev" en vez de "npm run dev".'
       }]);
     }
     setLoading(false);
@@ -89,7 +88,7 @@ export function AITutor({ question, userAnswer, isCorrect }) {
       }}>
         <Icons.Brain />
         <span style={{ fontWeight: 600, fontSize: 14, color: '#e2d5ff' }}>
-          Tutor IA — Pregúntame sobre este tema
+          Tutor IA &mdash; Preguntame sobre este tema
         </span>
       </div>
 
@@ -102,7 +101,7 @@ export function AITutor({ question, userAnswer, isCorrect }) {
             color: 'rgba(200,180,255,0.5)', fontSize: 13,
             textAlign: 'center', padding: 20, fontStyle: 'italic',
           }}>
-            Pregúntame cualquier duda sobre esta pregunta, el tema o conceptos relacionados...
+            Preguntame cualquier duda sobre esta pregunta, el tema o conceptos relacionados...
           </div>
         )}
         {messages.map((m, i) => (
