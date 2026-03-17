@@ -3,6 +3,7 @@ import { QUESTION_BANK, THEMES, THEME_EMOJIS } from './data/questions';
 import { Icons } from './components/Icons';
 import { AITutor } from './components/AITutor';
 import { AnalysisPanel } from './components/AnalysisPanel';
+import { LoginScreen } from './components/LoginScreen';
 
 function shuffleArray(arr) {
   const a = [...arr];
@@ -688,6 +689,11 @@ function getWeakAreas(allHistory) {
 
 // ─── Main App ───
 export default function App() {
+  const [session, setSession] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('fucs_session'));
+    } catch { return null; }
+  });
   const [screen, setScreen] = useState('home');
   const [quizQuestions, setQuizQuestions] = useState([]);
   const [results, setResults] = useState(null);
@@ -703,6 +709,16 @@ export default function App() {
       localStorage.setItem('fucs_history', JSON.stringify(allHistory.slice(-50)));
     } catch {}
   }, [allHistory]);
+
+  const handleLogin = (sess) => {
+    setSession(sess);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('fucs_session');
+    setSession(null);
+    setScreen('home');
+  };
 
   const startQuiz = (themes, size) => {
     let pool = themes.length > 0
@@ -727,8 +743,33 @@ export default function App() {
     setScreen('results');
   };
 
+  // Show login if no session
+  if (!session) {
+    return (
+      <div style={{ fontFamily: "'DM Sans', sans-serif", background: '#08061a', color: '#e8e0f0', minHeight: '100vh' }}>
+        <LoginScreen onLogin={handleLogin} />
+      </div>
+    );
+  }
+
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif", background: '#08061a', color: '#e8e0f0', minHeight: '100vh' }}>
+      {/* Session bar */}
+      <div style={{
+        padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        background: 'rgba(139,92,246,0.06)', borderBottom: '1px solid rgba(139,92,246,0.1)',
+      }}>
+        <span style={{ fontSize: 12, color: 'rgba(200,180,255,0.5)' }}>
+          {session.name} &middot; <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: 'rgba(200,180,255,0.3)' }}>{session.code}</span>
+        </span>
+        <button onClick={handleLogout} style={{
+          background: 'none', border: 'none', color: 'rgba(200,180,255,0.3)',
+          cursor: 'pointer', fontSize: 11, padding: '4px 8px',
+        }}>
+          Cerrar sesion
+        </button>
+      </div>
+
       {screen === 'home' && (
         <HomeScreen
           onStartQuiz={startQuiz}
