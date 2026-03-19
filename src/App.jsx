@@ -714,7 +714,9 @@ export default function App() {
     setSession(sess);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const { supabase } = await import('./lib/supabase');
+    await supabase.auth.signOut();
     localStorage.removeItem('fucs_session');
     setSession(null);
     setScreen('home');
@@ -760,7 +762,7 @@ export default function App() {
         background: 'rgba(139,92,246,0.06)', borderBottom: '1px solid rgba(139,92,246,0.1)',
       }}>
         <span style={{ fontSize: 12, color: 'rgba(200,180,255,0.5)' }}>
-          {session.name} &middot; <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: 'rgba(200,180,255,0.3)' }}>{session.code}</span>
+          {session.name} {session.email && <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: 'rgba(200,180,255,0.3)' }}>&middot; {session.email}</span>}
         </span>
         <button onClick={handleLogout} style={{
           background: 'none', border: 'none', color: 'rgba(200,180,255,0.3)',
