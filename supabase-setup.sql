@@ -47,6 +47,27 @@ INSERT INTO fucs_users (access_code, notes) VALUES
 ON CONFLICT (access_code) DO NOTHING;
 
 -- ============================================
+-- 6. Table: device change requests
+-- ============================================
+CREATE TABLE IF NOT EXISTS fucs_device_requests (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES fucs_users(id) ON DELETE CASCADE,
+  access_code TEXT NOT NULL,
+  new_fingerprint TEXT NOT NULL,
+  old_fingerprint TEXT,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'denied')),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  resolved_at TIMESTAMPTZ DEFAULT NULL,
+  device_info TEXT DEFAULT ''
+);
+
+ALTER TABLE fucs_device_requests ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Anyone can insert requests" ON fucs_device_requests FOR INSERT WITH CHECK (true);
+CREATE POLICY "Anyone can read requests" ON fucs_device_requests FOR SELECT USING (true);
+CREATE POLICY "Anyone can update requests" ON fucs_device_requests FOR UPDATE USING (true) WITH CHECK (true);
+
+-- ============================================
 -- USEFUL QUERIES FOR ADMIN:
 -- ============================================
 
@@ -66,3 +87,20 @@ ON CONFLICT (access_code) DO NOTHING;
 -- INSERT INTO fucs_users (access_code, notes)
 -- SELECT 'FUCS-' || upper(substr(md5(random()::text), 1, 6)), 'Auto-generated'
 -- FROM generate_series(1, 20);
+
+-- ============================================
+-- DEVICE REQUEST MANAGEMENT:
+-- ============================================
+
+-- See pending device requests:
+-- SELECT dr.access_code, u.student_name, dr.device_info, dr.status, dr.created_at
+-- FROM fucs_device_requests dr JOIN fucs_users u ON dr.user_id = u.id
+-- WHERE dr.status = 'pending' ORDER BY dr.created_at;
+
+-- Approve a device request (updates fingerprint automatically on next login):
+-- UPDATE fucs_device_requests SET status = 'approved', resolved_at = now()
+-- WHERE access_code = 'FUCS-EST001' AND status = 'pending';
+
+-- Deny a device request:
+-- UPDATE fucs_device_requests SET status = 'denied', resolved_at = now()
+-- WHERE access_code = 'FUCS-EST001' AND status = 'pending';
