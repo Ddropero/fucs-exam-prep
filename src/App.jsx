@@ -4,6 +4,7 @@ import { Icons } from './components/Icons';
 import { AITutor } from './components/AITutor';
 import { AnalysisPanel } from './components/AnalysisPanel';
 import { LoginScreen } from './components/LoginScreen';
+import { ExplanationPanel } from './components/ExplanationPanel';
 
 function shuffleArray(arr) {
   const a = [...arr];
@@ -355,16 +356,12 @@ function QuizScreen({ questions, onFinish, onExit }) {
               color: '#c4b5fd', fontSize: 13, cursor: 'pointer', fontWeight: 600,
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             }}>
-              <Icons.Book /> {showExplanation ? 'Ocultar explicacion' : 'Ver explicacion'}
+              <Icons.Book /> {showExplanation ? 'Ocultar explicacion' : 'Ver explicacion detallada'}
             </button>
 
             {showExplanation && q.explanation && (
-              <div style={{
-                marginTop: 12, padding: '16px 18px', borderRadius: 12,
-                background: 'rgba(139,92,246,0.06)', border: '1px solid rgba(139,92,246,0.12)',
-                fontSize: 14, lineHeight: 1.7, color: 'rgba(200,180,255,0.8)',
-              }}>
-                {q.explanation}
+              <div style={{ marginTop: 12 }}>
+                <ExplanationPanel question={q} />
               </div>
             )}
 
@@ -617,7 +614,9 @@ function StudyScreen({ onBack }) {
                     </div>
                   ))}
                   {card.explanation && (
-                    <p style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(200,180,255,0.7)', marginTop: 12 }}>{card.explanation}</p>
+                    <div style={{ marginTop: 12 }}>
+                      <ExplanationPanel question={card} />
+                    </div>
                   )}
                 </>
               ) : (
